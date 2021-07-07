@@ -64,7 +64,7 @@ def update():
       isDriving = True
 
     if isDriving:
-      # rc.get_delta_time() gives the time in seconds since the last time
+      #  rc.get_delta_time() gives the time in seconds since the last time
       # the update function was called
       counter += rc.get_delta_time()
 
