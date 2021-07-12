@@ -120,7 +120,7 @@ def update():
     """
     global isBackingUp
 
-    further_y_distance = 30
+    further_y_distance = 40
 
     # Use the triggers to control the car's speed
     rt = rc.controller.get_trigger(rc.controller.Trigger.RIGHT)
@@ -146,8 +146,8 @@ def update():
     # Retrieve the distance of the central pixel
     x, y = get_closest_pixel(blurred_image)
     distance = blurred_image[y, x]
-    if y + further_y_distance <= cropped_camera_height:
-        further_y = y + further_y_distance
+    if y - further_y_distance <= cropped_camera_height:
+        further_y = y - further_y_distance
     else:
         further_y = y
 
