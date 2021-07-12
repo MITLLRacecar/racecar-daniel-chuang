@@ -13,10 +13,12 @@ Lab 2B - Color Image Cone Parking
 import sys
 import cv2 as cv
 import numpy as np
+from enum import IntEnum
 
 sys.path.insert(1, "../../library")
 import racecar_core
 import racecar_utils as rc_utils
+import random
 
 ########################################################################################
 # Global variables
@@ -41,6 +43,51 @@ contour_area = 0  # The area of contour
 # Functions
 ########################################################################################
 
+isParked = False
+
+y = [10, 20, 30, 40, 80, 120, 160, 200]
+x = [37260, 28458, 27349, 17848, 4984.0, 2276, 1299, 822]
+
+degrees = np.polyfit(x, y, 6)
+
+def areaToDistance(area: float) -> int:
+    return round(np.polyval(degrees, area))
+
+'''
+def areaToDistance(area: float) -> int:
+    return round(6271.272*area ** -0.5125926)
+'''
+
+def remap_range(
+    val: float,
+    old_min: float,
+    old_max: float,
+    new_min: float,
+    new_max: float,
+) -> float:
+    """
+    Remaps a value from one range to another range.
+
+    Args:
+        val: A number form the old range to be rescaled.
+        old_min: The inclusive 'lower' bound of the old range.
+        old_max: The inclusive 'upper' bound of the old range.
+        new_min: The inclusive 'lower' bound of the new range.
+        new_max: The inclusive 'upper' bound of the new range.
+
+    Note:
+        min need not be less than max; flipping the direction will cause the sign of
+        the mapping to flip.  val does not have to be between old_min and old_max.
+    """
+    # TODO: remap val to the new range
+    '''
+    old_range = old_max - old_min
+    new_range = new_max - new_min
+    return (((val - old_min) * new_range) / old_range) + new_min
+    '''
+    ratio = (val - old_min) / (old_max - old_min)
+    new_range = new_max - new_min
+    return (ratio * new_range) + new_min
 
 def update_contour():
     """
@@ -107,13 +154,50 @@ def update():
     """
     global speed
     global angle
+    global isParked
 
     # Search for contours in the current color image
     update_contour()
 
     # TODO: Park the car 30 cm away from the closest orange cone
+    try:
+        angle = remap_range(contour_center[1], 0, rc.camera.get_width(), -1, 1)
+    except:
+        print("Angle Error: setting angle to 0.3")
+        angle = 0.3
+
+    distance = areaToDistance(contour_area)
+    print(contour_area)
+    print(distance)
+
+    if distance < 25:
+        angle *= -1
+        speed = remap_range(areaToDistance(contour_area), 0, 30, -1, 0)
+        speed = np.clip(speed, -1, 1)
+        isParked = False
+        print("Backing up")
+    elif distance < 33.3:
+        rc.drive.stop()
+        speed = 0
+        angle = 0
+        isParked = True
+        print("parked")
+    else:
+        if not isParked:
+            try:
+                speed = remap_range(areaToDistance(contour_area), 30, 500, 0, 1)
+                speed = np.clip(speed, -1, 1)
+            except:
+                print("Speed Error: setting speed to 0.2")
+                speed = 0.2
+    print(speed)
+
+    rc.drive.set_speed_angle(speed, angle)
 
     # Print the current speed and angle when the A button is held down
+    if rc.controller.is_down(rc.controller.Button.Y):
+        isParked = False
+        print("not parke")
     if rc.controller.is_down(rc.controller.Button.A):
         print("Speed:", speed, "Angle:", angle)
 
@@ -130,6 +214,7 @@ def update_slow():
     After start() is run, this function is run at a constant rate that is slower
     than update().  By default, update_slow() is run once per second
     """
+    '''
     # Print a line of ascii text denoting the contour area and x position
     if rc.camera.get_color_image() is None:
         # If no image is found, print all X's and don't display an image
@@ -144,6 +229,7 @@ def update_slow():
             s = ["-"] * 32
             s[int(contour_center[1] / 20)] = "|"
             print("".join(s) + " : area = " + str(contour_area))
+    '''
 
 
 ########################################################################################

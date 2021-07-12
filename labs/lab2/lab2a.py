@@ -6,6 +6,8 @@ Summer 2020
 Lab 2A - Color Image Line Following
 """
 
+# TODO QUEUE UP A TURN WITH A DOUBLE CROP
+
 ########################################################################################
 # Imports
 ########################################################################################
@@ -32,7 +34,7 @@ MIN_CONTOUR_AREA = 30
 CROP_FLOOR = ((360, 0), (rc.camera.get_height(), rc.camera.get_width()))
 
 # Colors, stored as a pair (hsv_min, hsv_max)
-BLUE = ((90, 50, 50), (120, 255, 255))  # The HSV range for the color blue
+BLUE = ((90, 120, 120), (120, 255, 255))  # The HSV range for the color blue
 # TODO (challenge 1): add HSV ranges for other colors
 GREEN = ((60, 50, 50), (80, 255, 255))
 RED = ((0, 50, 50), (0, 255, 255)) # original value was (0, 100, 100)
@@ -165,9 +167,14 @@ def remap_range(
         the mapping to flip.  val does not have to be between old_min and old_max.
     """
     # TODO: remap val to the new range
+    '''
     old_range = old_max - old_min
     new_range = new_max - new_min
     return (((val - old_min) * new_range) / old_range) + new_min
+    '''
+    ratio = (val - old_min) / (old_max - old_min)
+    new_range = new_max - new_min
+    return (ratio * new_range) + new_min
 
 def update():
     """
