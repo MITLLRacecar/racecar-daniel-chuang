@@ -27,7 +27,9 @@ rc = racecar_core.create_racecar()
 
 # Add any global variables here
 
-isBackingUp = False
+isParked = False
+speed = 0.0
+angle = 0.0
 
 ########################################################################################
 # Functions
@@ -58,7 +60,9 @@ def update():
     After start() is run, this function is run every frame until the back button
     is pressed
     """
-    global isBackingUp
+    global isParked
+    global speed
+    global angle
 
     further_y_distance = 40
 
@@ -68,7 +72,7 @@ def update():
 
     # TODO (warmup): Prevent forward movement if the car is about to hit something.
     # Allow the user to override safety stop by holding the right bumper.
-    cropped_camera_height = (rc.camera.get_height() // 2)
+    cropped_camera_height = (rc.camera.get_height() // 2) * 1
     top_left_inclusive = (0, 0)
     bottom_right_exclusive = (cropped_camera_height, (rc.camera.get_width()))
     depth_image = rc_utils.crop(depth_image, top_left_inclusive, bottom_right_exclusive)
@@ -77,17 +81,47 @@ def update():
     # Retrieve the distance of the central pixel
     y, x = rc_utils.get_closest_pixel(depth_image)
     distance = depth_image[y, x]
-    left_x = rc_utils.clamp(x - 40, 0, cropped_camera_height)
-    right_x = rc_utils.clamp(x + 40, 0, cropped_camera_height)
+    left_x = rc_utils.clamp(x - 40, 0, rc.camera.get_width() - 1)
+    right_x = rc_utils.clamp(x + 40, 0, rc.camera.get_width() - 1)
 
     left_distance = depth_image[y, left_x]
     right_distance = depth_image[y, right_x]
 
     # Check if in distance to stop
+    if distance < 19:
+        angle *= -1
+        speed = rc_utils.remap_range(distance, 0, 20, -1, 0)
+        speed = np.clip(speed, -1, 1)
+        isParked = False
+        print("Backing up")
+
+    # checks if the car is parked
+    elif distance < 20:
+        rc.drive.stop()
+        speed = 0
+        angle = 0
+        isParked = True
+        print("parked")
+
+    else:
+        if isParked == False:
+            # Tries to set speed at the value corresponding to the contour center
+            # If no contour center, then set speed to 0.2
+            try:
+                speed = rc_utils.remap_range(distance, 20, 500, 0, 1)
+                speed = np.clip(speed, -1, 1)
+            except:
+                print("Speed Error: setting speed to 0.2")
+                speed = 0.2
 
     # Use the left joystick to control the angle of the front wheels
-    angle = rc.controller.get_joystick(rc.controller.Joystick.LEFT)[0]
-    speed = 0
+    if isParked == False:
+        angle = rc_utils.remap_range(x, 0, rc.camera.get_width(), -1, 1)
+        multiplier = rc_utils.remap_range(distance, 20, 150, 3, 1)
+        angle = rc_utils.clamp(angle * multiplier, -1, 1)
+        print("multi:", multiplier, "angle:", angle)
+
+
     rc.drive.set_speed_angle(speed, angle)
 
     # Print the current speed and angle when the A button is held down
@@ -100,9 +134,6 @@ def update():
 
     # Display the current depth image
     rc.display.show_depth_image(depth_image, points=[(y, x), (y, right_x), (y, left_x)])
-
-    # TODO (stretch goal): Prevent forward movement if the car is about to drive off a
-    # ledge.  ONLY TEST THIS IN THE SIMULATION, DO NOT TEST THIS WITH A REAL CAR.
 
 
 ########################################################################################
