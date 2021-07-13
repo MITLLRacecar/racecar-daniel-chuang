@@ -62,44 +62,32 @@ def update():
 
     further_y_distance = 40
 
-    # Use the triggers to control the car's speed
-    rt = rc.controller.get_trigger(rc.controller.Trigger.RIGHT)
-    lt = rc.controller.get_trigger(rc.controller.Trigger.LEFT)
-    speed = rt - lt
-
     # Calculate the distance of the object directly in front of the car
     depth_image = rc.camera.get_depth_image()
     depth_image = (depth_image - 0.01) % 10000
 
     # TODO (warmup): Prevent forward movement if the car is about to hit something.
     # Allow the user to override safety stop by holding the right bumper.
-    cropped_camera_height = (rc.camera.get_height() // 3) * 2
-    top_left_inclusive = (0, rc.camera.get_width() // 4)
-    bottom_right_exclusive = (cropped_camera_height, (rc.camera.get_width() // 4) * 3)
+    cropped_camera_height = (rc.camera.get_height() // 2)
+    top_left_inclusive = (0, 0)
+    bottom_right_exclusive = (cropped_camera_height, (rc.camera.get_width()))
     depth_image = rc_utils.crop(depth_image, top_left_inclusive, bottom_right_exclusive)
     depth_image = (depth_image - 0.01) % 10000
 
     # Retrieve the distance of the central pixel
     y, x = rc_utils.get_closest_pixel(depth_image)
     distance = depth_image[y, x]
-    further_y = rc_utils.clamp(y - 40, 0, cropped_camera_height)
+    left_x = rc_utils.clamp(x - 40, 0, cropped_camera_height)
+    right_x = rc_utils.clamp(x + 40, 0, cropped_camera_height)
 
-    further_distance = depth_image[further_y, x]
+    left_distance = depth_image[y, left_x]
+    right_distance = depth_image[y, right_x]
 
     # Check if in distance to stop
-    ang_vel = rc.physics.get_linear_acceleration()
-    print(ang_vel)
-
-    if distance < 60 and not rc.controller.is_down(rc.controller.Button.RB):
-        if not further_distance > distance + 5:
-            print("STOP INITIALIZED at", further_distance - distance)
-            isBackingUp = True
-            speed = - 1
-
 
     # Use the left joystick to control the angle of the front wheels
     angle = rc.controller.get_joystick(rc.controller.Joystick.LEFT)[0]
-
+    speed = 0
     rc.drive.set_speed_angle(speed, angle)
 
     # Print the current speed and angle when the A button is held down
@@ -111,7 +99,7 @@ def update():
         print("Center distance:", distance)
 
     # Display the current depth image
-    rc.display.show_depth_image(depth_image, points=[(y, x), (further_y, x)])
+    rc.display.show_depth_image(depth_image, points=[(y, x), (y, right_x), (y, left_x)])
 
     # TODO (stretch goal): Prevent forward movement if the car is about to drive off a
     # ledge.  ONLY TEST THIS IN THE SIMULATION, DO NOT TEST THIS WITH A REAL CAR.
