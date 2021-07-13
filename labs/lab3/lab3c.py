@@ -28,8 +28,10 @@ rc = racecar_core.create_racecar()
 # Add any global variables here
 
 isParked = False
+isBackingUp = False
 speed = 0.0
 angle = 0.0
+new_angle = 0.0
 
 ########################################################################################
 # Functions
@@ -63,7 +65,8 @@ def update():
     global isParked
     global speed
     global angle
-
+    global isBackingUp
+    global new_angle
     further_y_distance = 40
 
     # Calculate the distance of the object directly in front of the car
@@ -81,22 +84,15 @@ def update():
     # Retrieve the distance of the central pixel
     y, x = rc_utils.get_closest_pixel(depth_image)
     distance = depth_image[y, x]
+    print(distance)
     left_x = rc_utils.clamp(x - 40, 0, rc.camera.get_width() - 1)
     right_x = rc_utils.clamp(x + 40, 0, rc.camera.get_width() - 1)
 
     left_distance = depth_image[y, left_x]
     right_distance = depth_image[y, right_x]
 
-    # Check if in distance to stop
-    if distance < 19:
-        angle *= -1
-        speed = rc_utils.remap_range(distance, 0, 20, -1, 0)
-        speed = np.clip(speed, -1, 1)
-        isParked = False
-        print("Backing up")
-
     # checks if the car is parked
-    elif distance < 20:
+    if distance < 20 and not isBackingUp:
         rc.drive.stop()
         speed = 0
         angle = 0
@@ -104,25 +100,47 @@ def update():
         print("parked")
 
     else:
-        if isParked == False:
+        if not isParked and not isBackingUp:
             # Tries to set speed at the value corresponding to the contour center
             # If no contour center, then set speed to 0.2
             try:
-                speed = rc_utils.remap_range(distance, 20, 500, 0, 1)
+                speed = rc_utils.remap_range(distance, 20, 300, 0, 1)
                 speed = np.clip(speed, -1, 1)
             except:
                 print("Speed Error: setting speed to 0.2")
                 speed = 0.2
 
+
     # Use the left joystick to control the angle of the front wheels
-    if isParked == False:
+    if not isParked:
         angle = rc_utils.remap_range(x, 0, rc.camera.get_width(), -1, 1)
         multiplier = rc_utils.remap_range(distance, 20, 150, 3, 1)
-        angle = rc_utils.clamp(angle * multiplier, -1, 1)
-        print("multi:", multiplier, "angle:", angle)
+        new_angle = rc_utils.clamp(angle * multiplier, -1, 1)
 
+    else:
+        angle = rc_utils.remap_range(x, 0, rc.camera.get_width(), -1, 1)
+        multiplier = 1
+        temp_angle = rc_utils.clamp(angle * multiplier, -1, 1)
+        if abs(temp_angle) > 0.7:
+            isBackingUp = True
+        else:
+            isBackingUp = False
 
-    rc.drive.set_speed_angle(speed, angle)
+    if isBackingUp:
+        angle = rc_utils.remap_range(x, 0, rc.camera.get_width(), -1, 1)
+        multiplier = 1
+        new_angle = rc_utils.clamp(angle * multiplier, -1, 1)
+        print("backing up")
+        isBackingUp = True
+        new_angle *= -1
+        speed = -0.2
+        if distance > 40:
+            isBackingUp = False
+            isParked = False
+
+    print("multi:", multiplier, "angle:", new_angle, "speed:", speed)
+
+    rc.drive.set_speed_angle(speed, new_angle)
 
     # Print the current speed and angle when the A button is held down
     if rc.controller.is_down(rc.controller.Button.A):
