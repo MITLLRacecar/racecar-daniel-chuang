@@ -45,63 +45,6 @@ isParked = False # Set to true once the car has stopped around 30cm in front of 
 ########################################################################################
 # Functions
 ########################################################################################
-def get_closest_pixel(
-    image: NDArray[(Any, Any), np.float32],
-) -> Tuple[int, int]:
-    """
-    Finds the closest pixel in a depth image.
-
-    Args:
-        depth_image: The depth image to process.
-        kernel_size: The size of the area to average around each pixel.
-
-    Returns:
-        The (row, column) of the pixel which is closest to the car.
-
-    Warning:
-        kernel_size be positive and odd.
-        It is highly recommended that you crop off the bottom of the image, or else
-        this function will likely return the ground directly in front of the car.
-
-    Note:
-        The larger the kernel_size, the more that the depth of each pixel is averaged
-        with the distances of the surrounding pixels.  This helps reduce noise at the
-        cost of reduced accuracy.
-    """
-    minVal, maxVal, minLoc, maxLoc = cv.minMaxLoc(image)
-
-    return minLoc
-
-def remap_range(
-    val: float,
-    old_min: float,
-    old_max: float,
-    new_min: float,
-    new_max: float,
-) -> float:
-    """
-    Remaps a value from one range to another range.
-
-    Args:
-        val: A number form the old range to be rescaled.
-        old_min: The inclusive 'lower' bound of the old range.
-        old_max: The inclusive 'upper' bound of the old range.
-        new_min: The inclusive 'lower' bound of the new range.
-        new_max: The inclusive 'upper' bound of the new range.
-
-    Note:
-        min need not be less than max; flipping the direction will cause the sign of
-        the mapping to flip.  val does not have to be between old_min and old_max.
-    """
-    '''
-    old_range = old_max - old_min
-    new_range = new_max - new_min
-    return (((val - old_min) * new_range) / old_range) + new_min
-    '''
-    ratio = (val - old_min) / (old_max - old_min)
-    new_range = new_max - new_min
-    return (ratio * new_range) + new_min
-
 def update_contour():
     """
     Finds contours in the current color image and uses them to update contour_center
@@ -170,36 +113,6 @@ def start():
     # Print start message
     print(">> Lab 3B - Depth Camera Cone Parking")
 
-def crop(
-    image: NDArray[(Any, ...), Any],
-    top_left_inclusive: Tuple[float, float],
-    bottom_right_exclusive: Tuple[float, float]
-) -> NDArray[(Any, ...), Any]:
-    """
-    Crops an image to a rectangle based on the specified pixel points.
-
-    Args:
-        image: The color or depth image to crop.
-        top_left_inclusive: The (row, column) of the top left pixel of the crop rectangle.
-        bottom_right_exclusive: The (row, column) of the pixel one past the bottom right corner of the crop rectangle.
-
-    Returns:
-        A cropped version of the image.
-
-    Note:
-        The top_left_inclusive pixel is included in the crop rectangle, but the
-        bottom_right_exclusive pixel is not.
-
-        If bottom_right_exclusive exceeds the bottom or right edge of the image, the
-        full image is included along that axis.
-    """
-    # Extract the minimum and maximum pixel rows and columns from the parameters
-    r_min, c_min = top_left_inclusive
-    r_max, c_max = bottom_right_exclusive
-
-    # Shorten the array to the specified row and column ranges
-    return image[r_min:r_max, c_min:c_max]
-
 def update():
     """
     After start() is run, this function is run every frame until the back button
@@ -217,15 +130,13 @@ def update():
     # Tries to turn at the angle corresponding to the contour center
     # If no contour center, then turn at an angle of 0.3
     try:
-        angle = remap_range(contour_center[1], 0, rc.camera.get_width(), -1, 1)
+        angle = rc_utils.remap_range(contour_center[1], 0, rc.camera.get_width(), -1, 1)
     except:
         print("Angle Error: setting angle to 0.3")
         angle = 0.3
 
     # Gets a depth image, and filters for noise and null values
     depth_image = rc.camera.get_depth_image()
-    kernel_size = 11
-    blurred_image = cv.GaussianBlur(depth_image, (kernel_size, kernel_size), 0)
 
     # Crops the depth image
     top_left_inclusive = (0, 0)
@@ -239,16 +150,16 @@ def update():
     masked_depth_image = (masked_depth_image - 0.01) % 10000
 
     # Gets the distance to the closest value in the new masked depth image
-    cropped_image = crop(masked_depth_image, top_left_inclusive, bottom_right_exclusive)
+    cropped_image = rc_utils.crop(masked_depth_image, top_left_inclusive, bottom_right_exclusive)
     rc.display.show_depth_image(cropped_image)
-    x, y = get_closest_pixel(cropped_image)
+    y, x = rc_utils.get_closest_pixel(cropped_image)
     distance = cropped_image[y, x]
     print(distance)
 
     # Checks if car overshot parking and backs up
     if distance < 29:
         angle *= -1
-        speed = remap_range(distance, 0, 30, -1, 0)
+        speed = rc_utils.remap_range(distance, 0, 30, -1, 0)
         speed = np.clip(speed, -1, 1)
         isParked = False
         print("Backing up")
@@ -266,7 +177,7 @@ def update():
             # Tries to set speed at the value corresponding to the contour center
             # If no contour center, then set speed to 0.2
             try:
-                speed = remap_range(distance, 30, 500, 0, 1)
+                speed = rc_utils.remap_range(distance, 30, 500, 0, 1)
                 speed = np.clip(speed, -1, 1)
             except:
                 print("Speed Error: setting speed to 0.2")
