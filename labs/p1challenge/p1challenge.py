@@ -26,13 +26,14 @@ class Mode(Enum):
     searching = 0
     red = 1
     blue = 2
-    # !!!!!!!!!!!!! driving = 3 potentially can implement straight line driving for speed
+    driving = 3
 
 class Color(Enum):
     RED = 0
     BLUE = 1
 
 curr_mode = Mode.searching
+color_priority = Color.RED
 
 speed = 0.0
 angle = 0.0
@@ -51,7 +52,7 @@ def update_contours(color_image):
     Finds contoours for the blue and red cone using color image
     """
 
-    MIN_CONTOUR_AREA = 1000
+    MIN_CONTOUR_AREA = 450
 
     # If no image is fetched
     if color_image is None:
@@ -69,6 +70,7 @@ def update_contours(color_image):
         # Select the largest contour from red and blue contours
         contour_R = rc_utils.get_largest_contour(contours_R, MIN_CONTOUR_AREA)
         contour_B = rc_utils.get_largest_contour(contours_B, MIN_CONTOUR_AREA)
+        #print(rc_utils.get_contour_area(contour_B))
 
         # Draw a dot at the center of this contour in red
         if contour_R is not None and contour_B is not None: # checks if both are valid
@@ -124,12 +126,27 @@ def update():
     global speed
     global angle
 
+    # Reset speed and angle variables
+    speed = 0.0
+    angle = 0.0
+
     # TODO: Slalom between red and blue cones.  The car should pass to the right of
     # each red cone and the left of each blue cone.
 
     # Fetching images
     depth_image = rc.camera.get_depth_image()
     color_image = rc.camera.get_color_image()
+
+    # Get camera sizes
+    camera_height = (rc.camera.get_height() // 10) * 7
+    camera_width = (rc.camera.get_width() // 10) * 7
+
+    top_left_inclusive = (0, 0)
+    bottom_right_exclusive = ((camera_height, camera_width))
+
+    # Cropping both images
+    rc_utils.crop(color_image, top_left_inclusive, bottom_right_exclusive)
+    rc_utils.crop(depth_image, top_left_inclusive, bottom_right_exclusive)
 
     # Getting contours from update_contours()
     contour, color = update_contours(color_image)
@@ -144,6 +161,9 @@ def update():
         rc_utils.draw_contour(color_image_display, contour)
         rc_utils.draw_circle(color_image_display, contour_center)
 
+    else:
+        curr_mode = Mode.driving
+
     # Setting the current state
     if color == Color.RED:
         curr_mode = Mode.red
@@ -155,21 +175,33 @@ def update():
     # Check current mode and implement the respective actions
     if curr_mode == Mode.searching:
         # TODO: Search for cone
-        pass
-    if curr_mode == Mode.red:
+        speed = 0.1
+    elif curr_mode == Mode.red:
         # TODO: Red Cone Logic -> drive right
-        #rc_utils.remap_range(contour_center[], old_min, old_max, new_min, new_max)
-        pass
-    if curr_mode == Mode.blue:
+        speed = 0.1
+        angle = rc_utils.remap_range(contour_center[1], 0, camera_width, -1, 1)
+        angle += 1
+    elif curr_mode == Mode.blue:
         # TODO: Blue Cone Logic -> drive left
-        pass
+        speed = 0.1
+        angle = rc_utils.remap_range(contour_center[1], 0, camera_width, -1, 1)
+        angle -= 1
+    elif curr_mode == Mode.driving:
+        speed = 0.1 # !!!
+        angle = 0
+
 
     ###########
     # TEMP MANUAL CONTROLS
     ###########
-
+    '''
     speed -= rc.controller.get_trigger(rc.controller.Trigger.LEFT)
     speed += rc.controller.get_trigger(rc.controller.Trigger.RIGHT)
+    '''
+
+    # Clamping functions
+    speed = rc_utils.clamp(speed, -1, 1)
+    angle = rc_utils.clamp(angle, -1, 1)
 
 
     # Displaying the color camera that was drawn on
