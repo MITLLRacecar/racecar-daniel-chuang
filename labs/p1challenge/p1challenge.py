@@ -34,6 +34,9 @@ class Color(Enum):
 
 curr_mode = Mode.searching
 
+speed = 0.0
+angle = 0.0
+
 rc = racecar_core.create_racecar()
 
 RED = ((160, 0, 0), (179, 255, 255)) # NOTE: THIS IS ON THE OTHER SIDE OF THE HUE WHEEL!
@@ -118,6 +121,8 @@ def update():
 
     # Globals
     global curr_mode
+    global speed
+    global angle
 
     # TODO: Slalom between red and blue cones.  The car should pass to the right of
     # each red cone and the left of each blue cone.
@@ -163,16 +168,15 @@ def update():
     # TEMP MANUAL CONTROLS
     ###########
 
-    manual_speed = 0
-    manual_speed -= rc.controller.get_trigger(rc.controller.Trigger.LEFT)
-    manual_speed += rc.controller.get_trigger(rc.controller.Trigger.RIGHT)
+    speed -= rc.controller.get_trigger(rc.controller.Trigger.LEFT)
+    speed += rc.controller.get_trigger(rc.controller.Trigger.RIGHT)
 
 
     # Displaying the color camera that was drawn on
     rc.display.show_color_image(color_image_display)
 
     # Setting the speed and angle of the car
-    rc.drive.set_speed_angle(manual_speed, manual_angle)
+    rc.drive.set_speed_angle(speed, angle)
 
 ########################################################################################
 # DO NOT MODIFY: Register start and update and begin execution
