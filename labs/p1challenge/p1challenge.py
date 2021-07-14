@@ -52,7 +52,7 @@ def update_contours(color_image):
     Finds contoours for the blue and red cone using color image
     """
 
-    MIN_CONTOUR_AREA = 450
+    MIN_CONTOUR_AREA = 100
 
     # If no image is fetched
     if color_image is None:
@@ -125,6 +125,7 @@ def update():
     global curr_mode
     global speed
     global angle
+    global color_priority
 
     # Reset speed and angle variables
     speed = 0.0
@@ -138,8 +139,8 @@ def update():
     color_image = rc.camera.get_color_image()
 
     # Get camera sizes
-    camera_height = (rc.camera.get_height() // 10) * 7
-    camera_width = (rc.camera.get_width() // 10) * 7
+    camera_height = (rc.camera.get_height() // 10) * 9
+    camera_width = (rc.camera.get_width() // 10) * 9
 
     top_left_inclusive = (0, 0)
     bottom_right_exclusive = ((camera_height, camera_width))
@@ -161,6 +162,9 @@ def update():
         rc_utils.draw_contour(color_image_display, contour)
         rc_utils.draw_circle(color_image_display, contour_center)
 
+        # Calculate distance
+        distance = rc_utils.get_pixel_average_distance(depth_image, contour_center)
+
     else:
         curr_mode = Mode.driving
 
@@ -173,31 +177,31 @@ def update():
         curr_mode = Mode.searching
 
     # Check current mode and implement the respective actions
-    if curr_mode == Mode.searching:
-        # TODO: Search for cone
-        speed = 0.1
-    elif curr_mode == Mode.red:
+    if curr_mode == Mode.red and distance < 200:
         # TODO: Red Cone Logic -> drive right
-        speed = 0.1
-        angle = rc_utils.remap_range(contour_center[1], 0, camera_width, -1, 1)
-        angle += 1
-    elif curr_mode == Mode.blue:
+        # angle = rc_utils.remap_range(contour_center[1], 0, camera_width, 0, 1)
+        angle = rc_utils.remap_range(distance, 500, 60, 0, 0.5)
+        print("RED, ANGLE:", angle)
+        color_priority = Color.RED
+    elif curr_mode == Mode.blue and distance < 200:
         # TODO: Blue Cone Logic -> drive left
-        speed = 0.1
-        angle = rc_utils.remap_range(contour_center[1], 0, camera_width, -1, 1)
-        angle -= 1
-    elif curr_mode == Mode.driving:
-        speed = 0.1 # !!!
-        angle = 0
+        # angle = rc_utils.remap_range(contour_center[1], 0, camera_width, -1, 0)
+        angle = rc_utils.remap_range(distance, 60, 500, -0.5, 0)
+        print("BLUE, ANGLE:", angle)
+        color_priority = Color.BLUE
+    else:
+        if color_priority == Color.RED:
+            angle = -1
+        else:
+            angle = 1
 
 
     ###########
     # TEMP MANUAL CONTROLS
     ###########
-    '''
     speed -= rc.controller.get_trigger(rc.controller.Trigger.LEFT)
     speed += rc.controller.get_trigger(rc.controller.Trigger.RIGHT)
-    '''
+
 
     # Clamping functions
     speed = rc_utils.clamp(speed, -1, 1)
