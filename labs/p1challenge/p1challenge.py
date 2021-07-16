@@ -26,17 +26,21 @@ class Mode(Enum):
     searching = 0
     red = 1
     blue = 2
-    driving = 3
+    linear = 3
 
 class Color(Enum):
     RED = 0
     BLUE = 1
+    BOTH = 2
 
 curr_mode = Mode.searching
 color_priority = Color.RED
 
 speed = 0.0
 angle = 0.0
+last_distance = 0
+
+# counter = 0
 
 rc = racecar_core.create_racecar()
 
@@ -52,7 +56,7 @@ def update_contours(color_image):
     Finds contoours for the blue and red cone using color image
     """
 
-    MIN_CONTOUR_AREA = 100
+    MIN_CONTOUR_AREA = 700
 
     # If no image is fetched
     if color_image is None:
@@ -70,13 +74,19 @@ def update_contours(color_image):
         # Select the largest contour from red and blue contours
         contour_R = rc_utils.get_largest_contour(contours_R, MIN_CONTOUR_AREA)
         contour_B = rc_utils.get_largest_contour(contours_B, MIN_CONTOUR_AREA)
-        #print(rc_utils.get_contour_area(contour_B))
 
         # Draw a dot at the center of this contour in red
         if contour_R is not None and contour_B is not None: # checks if both are valid
 
+            contour_area_R = rc_utils.get_contour_area(contour_R)
+            contour_area_B = rc_utils.get_contour_area(contour_B)
+
+            # if the contour areas are similar enough, indicate that it is a checkpoint
+            if abs(contour_area_R - contour_area_B) < 400:
+                return None, Color.BOTH
+
             # If red contour is bigger than the blue one
-            if rc_utils.get_contour_area(contour_R) > rc_utils.get_contour_area(contour_B):
+            elif contour_area_R > contour_area_B:
                 return contour_R, Color.RED
 
             # If blue contour is equal to or bigger than the red one
@@ -126,11 +136,16 @@ def update():
     global speed
     global angle
     global color_priority
+    global last_distance
+    # global counter
 
     # Reset speed and angle variables
     speed = 0.0
     angle = 0.0
+    distance = 5000
+    speed_multiplier = 1
 
+    rc.drive.set_max_speed(0.1)
     # TODO: Slalom between red and blue cones.  The car should pass to the right of
     # each red cone and the left of each blue cone.
 
@@ -139,10 +154,10 @@ def update():
     color_image = rc.camera.get_color_image()
 
     # Get camera sizes
-    camera_height = (rc.camera.get_height() // 10) * 9
-    camera_width = (rc.camera.get_width() // 10) * 9
+    camera_height = (rc.camera.get_height() // 10) * 10
+    camera_width = (rc.camera.get_width() // 10) * 10
 
-    top_left_inclusive = (0, 0)
+    top_left_inclusive = (0, rc.camera.get_width() - camera_width)
     bottom_right_exclusive = ((camera_height, camera_width))
 
     # Cropping both images
@@ -164,52 +179,80 @@ def update():
 
         # Calculate distance
         distance = rc_utils.get_pixel_average_distance(depth_image, contour_center)
+        last_distance = distance
+        # print(f"Distance: {distance}")
 
     else:
-        curr_mode = Mode.driving
+        curr_mode = Mode.searching
 
     # Setting the current state
     if color == Color.RED:
         curr_mode = Mode.red
     elif color == Color.BLUE:
         curr_mode = Mode.blue
+    elif color == Color.BOTH:
+        curr_mode = Mode.linear
     else:
         curr_mode = Mode.searching
 
     # Check current mode and implement the respective actions
-    if curr_mode == Mode.red and distance < 200:
-        # TODO: Red Cone Logic -> drive right
-        # angle = rc_utils.remap_range(contour_center[1], 0, camera_width, 0, 1)
-        angle = rc_utils.remap_range(distance, 500, 60, 0, 0.5)
-        print("RED, ANGLE:", angle)
+    if distance < 40:
+        angle = 0
+    if curr_mode == Mode.red and (distance < 120 or distance > 150):
+        # TODO: Red Cone Logic -> drive right to avoid
+        angle = rc_utils.remap_range(contour_center[1] + 30, -20, camera_width, 0, 1)
+        angle *= rc_utils.remap_range(distance, 500, 30, 0, 2)
         color_priority = Color.RED
-    elif curr_mode == Mode.blue and distance < 200:
-        # TODO: Blue Cone Logic -> drive left
-        # angle = rc_utils.remap_range(contour_center[1], 0, camera_width, -1, 0)
-        angle = rc_utils.remap_range(distance, 60, 500, -0.5, 0)
-        print("BLUE, ANGLE:", angle)
+        print("RED: TURNING RIGHT")
+    elif curr_mode == Mode.blue and (distance < 120 or distance > 1500):
+        # TODO: Blue Cone Logic -> drive left to avoid
+        angle = rc_utils.remap_range(contour_center[1] - 30, -20, camera_width, -1, 0)
+        angle *= rc_utils.remap_range(distance, 30, 500, 2, 0)
         color_priority = Color.BLUE
+        print("BLUE: TURNING LEFT")
+    elif (curr_mode == Mode.blue or curr_mode == Mode.red) and distance > 150 and distance < 400:
+        angle = 0
+    elif curr_mode == Mode.linear:
+        angle = 0
+    
+    # Makes the car return back on track after turning to avoid a cone
     else:
         if color_priority == Color.RED:
-            angle = -1
+            angle = rc_utils.remap_range(last_distance, 20, 100, -0.2, -0.5) # drive left to return
+            print("RED: TURNING BACK LEFT")
         else:
-            angle = 1
+            angle = rc_utils.remap_range(last_distance, 20, 100, 0.2, 0.5) # drive right to return
+            print("BLUE: TURNING BACK BLUE")
 
 
     ###########
     # TEMP MANUAL CONTROLS
     ###########
+    '''
     speed -= rc.controller.get_trigger(rc.controller.Trigger.LEFT)
     speed += rc.controller.get_trigger(rc.controller.Trigger.RIGHT)
-
+    '''
 
     # Clamping functions
-    speed = rc_utils.clamp(speed, -1, 1)
     angle = rc_utils.clamp(angle, -1, 1)
+
+    # '''
+    # Modifying speed
+    speed = rc_utils.remap_range(abs(angle), 0, 1, 1, 0.1)
+    speed_multiplier = rc_utils.remap_range(last_distance, 0, 150, 0.01, 0.8)
+    speed *= speed_multiplier
+    # '''
+
+    # !!! Slow down if no cone detected that matches the priority
+
+    speed = rc_utils.clamp(speed, -1, 1)
 
 
     # Displaying the color camera that was drawn on
     rc.display.show_color_image(color_image_display)
+
+    # print the color
+    print(color, color_priority)
 
     # Setting the speed and angle of the car
     rc.drive.set_speed_angle(speed, angle)
