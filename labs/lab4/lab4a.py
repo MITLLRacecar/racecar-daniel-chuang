@@ -66,6 +66,9 @@ def update():
     lt = rc.controller.get_trigger(rc.controller.Trigger.LEFT)
     speed = rt - lt
 
+    # Use the left joystick to control the angle of the front wheels
+    angle = rc.controller.get_joystick(rc.controller.Joystick.LEFT)[0]
+
     # Calculate the distance in front of and behind the car
     scan = rc.lidar.get_samples()
     _, forward_dist = rc_utils.get_lidar_closest_point(scan, FRONT_WINDOW)
@@ -73,9 +76,21 @@ def update():
 
     # TODO (warmup): Prevent the car from hitting things in front or behind it.
     # Allow the user to override safety stop by holding the left or right bumper.
-
-    # Use the left joystick to control the angle of the front wheels
-    angle = rc.controller.get_joystick(rc.controller.Joystick.LEFT)[0]
+    if not rc.controller.is_down(rc.controller.Button.RB) and not rc.controller.is_down(rc.controller.Button.LB):
+        if forward_dist < 100:
+            if abs(speed) == speed:
+                speed = 0
+        elif back_dist < 100:
+            if abs(speed) != speed:
+                speed = 0
+        elif forward_dist < 200:
+            multiplier = rc_utils.remap_range(forward_dist, 50, 200, 0, 1)
+            multiplier = rc_utils.clamp(multiplier, 0, 1)
+            speed = speed * multiplier
+        elif back_dist < 200:
+            multiplier = rc_utils.remap_range(back_dist, 50, 200, 0, 1)
+            multiplier = rc_utils.clamp(multiplier, 0, 1)
+            speed = speed * multiplier
 
     rc.drive.set_speed_angle(speed, angle)
 
