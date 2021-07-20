@@ -40,7 +40,7 @@ speed = 0.0
 angle = 0.0
 last_distance = 0
 
-# counter = 0
+counter = 0
 
 rc = racecar_core.create_racecar()
 
@@ -83,7 +83,7 @@ def update_contours(color_image):
             contour_area_B = rc_utils.get_contour_area(contour_B)
             # if the contour areas are similar enough, indicate that it is a checkpoint
             if abs(contour_area_R - contour_area_B) < 700:
-                #print(abs(contour_area_R - contour_area_B))
+                print(abs(contour_area_R - contour_area_B))
                 return None, Color.BOTH
 
             # If red contour is bigger than the blue one
@@ -119,12 +119,13 @@ def start():
     # Have the car begin at a stop
     rc.drive.stop()
     curr_mode = Mode.searching
-    rc.drive.set_max_speed(1)
-    rc.set_update_slow_time(0.1)
+    rc.drive.set_max_speed(0.75)
 
     # Print start message
     print(">> Phase 1 Challenge: Cone Slaloming")
 
+def update_slow():
+	pass
 
 def update():
     """
@@ -140,13 +141,14 @@ def update():
     global angle
     global color_priority
     global last_distance
-    # global counter
+    global counter
 
     # Reset speed and angle variables
     speed = 0.0
     angle = 0.0
     distance = 5000
     speed_multiplier = 1
+    distance_param = 200
 
     # TODO: Slalom between red and blue cones.  The car should pass to the right of
     # each red cone and the left of each blue cone.
@@ -182,7 +184,7 @@ def update():
         # Calculate distance
         distance = rc_utils.get_pixel_average_distance(depth_image, contour_center)
         last_distance = distance
-        # print(f"Distance: {distance}")
+        print(f"Distance: {distance}")
 
     else:
         curr_mode = Mode.searching
@@ -201,28 +203,29 @@ def update():
 
 
     # Check current mode and implement the respective actions
-    if distance < 40:
-        # print("0 angle")
-        angle = 0
-    if curr_mode == Mode.red and (last_distance < 220):
+    if curr_mode == Mode.red and (distance < distance_param):
         # TODO: Red Cone Logic -> drive right to avoid
-        angle = rc_utils.remap_range(contour_center[1] + 30, 0, camera_width, 0.3, 1)
+        angle = rc_utils.remap_range(contour_center[1], 0, camera_width, 0.3, 1)
         angle *= rc_utils.remap_range(last_distance, 200, 50, 0, 2)
-        # print("RED, ANGLE:", angle)
-    elif curr_mode == Mode.blue and (last_distance < 220):
+        print("RED, ANGLE:", angle)
+        counter = 0
+    elif curr_mode == Mode.blue and (distance < distance_param):
         # TODO: Blue Cone Logic -> drive left to avoid
-        angle = rc_utils.remap_range(contour_center[1] - 30, 0, camera_width, -1, -0.3)
+        angle = rc_utils.remap_range(contour_center[1], 0, camera_width, -1, -0.3)
         angle *= rc_utils.remap_range(last_distance, 50, 200, 2, 0)
-        # print("BLUE, ANGLE:", angle)
-    elif (curr_mode == Mode.blue or curr_mode == Mode.red) and distance >= 220:
+        print("BLUE, ANGLE:", angle)
+        counter = 0
+    elif (curr_mode == Mode.blue or curr_mode == Mode.red) and distance >= distance_param:
         if curr_mode == Mode.blue:
-            angle = rc_utils.remap_range(contour_center[1], 0, camera_width, -0.4, 0.05)
+            angle = rc_utils.remap_range(contour_center[1], 0, camera_width, -1, 1)
         elif curr_mode == Mode.red:
-            angle = rc_utils.remap_range(contour_center[1], 0, camera_width, -0.05, 0.4)
-        # print("waiting")
+            angle = rc_utils.remap_range(contour_center[1], 0, camera_width, -1, 1)
+        print("waiting")
+        counter = 0
     elif curr_mode == Mode.linear:
-        # print("got here")
-        angle = 0.05
+        print("got here")
+        angle = 0
+        counter = 0
     else:
         if color_priority == Color.RED:
             angle = rc_utils.remap_range(last_distance, 0, 100, -0.3, -0.65) # drive left to return
@@ -239,8 +242,8 @@ def update():
 
     # Clamping functions
     angle = rc_utils.clamp(angle, -1, 1)
-    speed = rc_utils.remap_range(abs(angle), 0, 1, 1, 0.1)
-    speed_multiplier = rc_utils.remap_range(last_distance, 40, 150, 0.05, 1)
+    speed = rc_utils.remap_range(abs(angle), 0, 1, 1, 0.05)
+    speed = rc_utils.remap_range(last_distance, 60, 150, 0.1, 0.98)
     speed *= speed_multiplier
     speed = rc_utils.clamp(speed, -1, 1)
 
@@ -256,5 +259,5 @@ def update():
 ########################################################################################
 
 if __name__ == "__main__":
-    rc.set_start_update(start, update, None)
+    rc.set_start_update(start, update, update_slow)
     rc.go()

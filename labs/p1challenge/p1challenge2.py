@@ -120,11 +120,13 @@ def start():
     rc.drive.stop()
     curr_mode = Mode.searching
     rc.drive.set_max_speed(1)
-    rc.set_update_slow_time(0.1)
+    rc.set_update_slow_time(0.00000000000000001)
 
     # Print start message
     print(">> Phase 1 Challenge: Cone Slaloming")
 
+def update_slow():
+	pass
 
 def update():
     """
@@ -143,10 +145,11 @@ def update():
     # global counter
 
     # Reset speed and angle variables
-    speed = 0.0
+    speed = 1
     angle = 0.0
     distance = 5000
     speed_multiplier = 1
+    distance_param = 170
 
     # TODO: Slalom between red and blue cones.  The car should pass to the right of
     # each red cone and the left of each blue cone.
@@ -204,17 +207,22 @@ def update():
     if distance < 40:
         # print("0 angle")
         angle = 0
-    if curr_mode == Mode.red and (last_distance < 220):
+    elif curr_mode == Mode.red and (distance < distance_param):
+        # speed = 0.7
+        speed = 0.6
         # TODO: Red Cone Logic -> drive right to avoid
         angle = rc_utils.remap_range(contour_center[1] + 30, 0, camera_width, 0.3, 1)
         angle *= rc_utils.remap_range(last_distance, 200, 50, 0, 2)
         # print("RED, ANGLE:", angle)
-    elif curr_mode == Mode.blue and (last_distance < 220):
+    elif curr_mode == Mode.blue and (distance < distance_param):
+        # speed = 0.7
+        speed = 0.6
         # TODO: Blue Cone Logic -> drive left to avoid
         angle = rc_utils.remap_range(contour_center[1] - 30, 0, camera_width, -1, -0.3)
         angle *= rc_utils.remap_range(last_distance, 50, 200, 2, 0)
         # print("BLUE, ANGLE:", angle)
-    elif (curr_mode == Mode.blue or curr_mode == Mode.red) and distance >= 220:
+    elif (curr_mode == Mode.blue or curr_mode == Mode.red) and distance >= distance_param:
+        speed = 1
         if curr_mode == Mode.blue:
             angle = rc_utils.remap_range(contour_center[1], 0, camera_width, -0.4, 0.05)
         elif curr_mode == Mode.red:
@@ -222,6 +230,7 @@ def update():
         # print("waiting")
     elif curr_mode == Mode.linear:
         # print("got here")
+        speed = 1
         angle = 0.05
     else:
         if color_priority == Color.RED:
@@ -239,9 +248,14 @@ def update():
 
     # Clamping functions
     angle = rc_utils.clamp(angle, -1, 1)
-    speed = rc_utils.remap_range(abs(angle), 0, 1, 1, 0.1)
-    speed_multiplier = rc_utils.remap_range(last_distance, 40, 150, 0.05, 1)
-    speed *= speed_multiplier
+
+    # speed = rc_utils.remap_range(abs(angle), 0, 1, 1, 0.05)
+    # speed_multiplier = rc_utils.remap_range(last_distance, 40, 150, 0.05, 1)
+    # speed *= speed_multiplier
+
+    # speed *= rc_utils.remap_range(last_distance, 100, 1000, 0.55, 1)
+    speed *= rc_utils.remap_range(last_distance, 100, 1000, 0.7, 0.9)
+    
     speed = rc_utils.clamp(speed, -1, 1)
 
 
@@ -256,5 +270,5 @@ def update():
 ########################################################################################
 
 if __name__ == "__main__":
-    rc.set_start_update(start, update, None)
+    rc.set_start_update(start, update, update_slow)
     rc.go()

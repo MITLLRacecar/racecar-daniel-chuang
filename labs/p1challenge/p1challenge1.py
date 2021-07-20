@@ -18,6 +18,8 @@ sys.path.insert(0, "../../library")
 import racecar_core
 import racecar_utils as rc_utils
 
+from checkerboard import detect_checkerboard
+
 rc = racecar_core.create_racecar()
 
 ########################################################################################
@@ -26,6 +28,7 @@ rc = racecar_core.create_racecar()
 
 RED = ((160, 0, 0), (179, 255, 255)) # NOTE: THIS IS ON THE OTHER SIDE OF THE HUE WHEEL!
 BLUE = ((90, 120, 120), (120, 255, 255))
+BLACK = ((0, 0, 0), (70, 70, 70))
 
 ########################################################################################
 # Utility Functions
@@ -51,6 +54,8 @@ def closest_contour_center(depth_image, contours):
 
 	Returns the coordinates for that center in y, x format.
 	"""
+	depth_image = cv.GaussianBlur(depth_image, (3, 3), 0)
+
 	contour_centers = []
 	for contour in contours:
 		contour_centers.append(rc_utils.get_contour_center(contour))
@@ -138,24 +143,41 @@ def update():
 		contour_center_color = colors[contour_center_color]
 		if contour_center_color == RED:
 			contour_center_color = "RED"
-		else:
+		elif contour_center_color == BLUE:
 			contour_center_color = "BLUE"
+
+	# MANUAL CONTROLS
+	# '''
+	speed = 0
+	angle = 0
+
+	speed -= rc.controller.get_trigger(rc.controller.Trigger.LEFT)
+	speed += rc.controller.get_trigger(rc.controller.Trigger.RIGHT)
+	angle = rc.controller.get_joystick(rc.controller.Joystick.LEFT)[0]
+
+	'''
+	corners, score = detect_checkerboard(color_image, (3, 2))
+	if score < 0.3:
+		angle = 0
+		speed = 1
+		print("CHECKERBOARD DETECTED")
+	
+	# Retrieves black contours
+	black_contours = update_contours(color_image, [BLACK])
+	print(black_contours)
+	if black_contours != []:
+		print("BLACK DETECTED")
+		angle = 0
+		speed = 1
+		rc_utils.draw_contour(color_image, black_contours[0])
+	'''
 
 	# Display Camera
 	if contour_center is not None:
 		rc_utils.draw_circle(color_image, contour_center)
 	rc.display.show_color_image(color_image)
 
-	# MANUAL CONTROLS
-	# '''
-	manual_speed = 0
-	manual_angle = 0
-
-	manual_speed -= rc.controller.get_trigger(rc.controller.Trigger.LEFT)
-	manual_speed += rc.controller.get_trigger(rc.controller.Trigger.RIGHT)
-	manual_angle = rc.controller.get_joystick(rc.controller.Joystick.LEFT)[0]
-    
-	rc.drive.set_speed_angle(manual_speed, manual_angle)
+	rc.drive.set_speed_angle(speed, angle)
 	# '''
 
 ########################################################################################
