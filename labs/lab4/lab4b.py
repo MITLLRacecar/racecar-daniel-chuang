@@ -29,7 +29,7 @@ windows = np.array(())
 start_degrees = -90
 total_degrees = 180
 total_windows = 10
-max_speed = 0.75
+max_speed = 1
 
 ########################################################################################
 # Functions
@@ -91,6 +91,9 @@ def update():
     angle_degrees = np.mean(windows[angle_index])
     angle = rc_utils.remap_range(angle_degrees, start_degrees, start_degrees + total_degrees - 1, -1, 1) * 2
     angle = rc_utils.clamp(angle, -1, 1)
+    if angle_degrees > -20 and angle_degrees < 20:
+        print("ZERO ANGLE")
+        angle = 0
 
     # Manual speed control
     """
